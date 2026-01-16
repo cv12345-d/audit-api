@@ -10,7 +10,11 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors()); // Permet les requêtes depuis n'importe quel domaine
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
 // Fichier de stockage des audits
@@ -158,4 +162,5 @@ initializeStorage().then(() => {
 process.on('SIGTERM', () => {
   console.log('Arrêt du serveur...');
   process.exit(0);
+
 });

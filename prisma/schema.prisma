@@ -1,0 +1,167 @@
+// schema.prisma — ThesisMatch (UCLouvain)
+// Schéma cible : PostgreSQL + pgvector
+//
+// Pour le développement local, utiliser SQLite (provider = "sqlite")
+// Pour la production UCLouvain, utiliser PostgreSQL avec pgvector.
+//
+// Migration : npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Changer en "postgresql" pour la production
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// UTILISATEURS & AUTHENTIFICATION
+// ─────────────────────────────────────────────
+
+enum Role {
+  ETUDIANT
+  PROMOTEUR
+  ADMIN
+}
+
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  password    String
+  role        Role      @default(ETUDIANT)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  etudiant    Etudiant?
+  promoteur   Promoteur?
+}
+
+// ─────────────────────────────────────────────
+// PROMOTEURS
+// ─────────────────────────────────────────────
+
+model Promoteur {
+  id            String    @id @default(cuid())
+  nom           String
+  prenom        String
+  email         String    @unique
+  // Domaines de recherche (stockés en JSON pour SQLite, Array pour PostgreSQL)
+  domaines      String    // JSON array: ["Communication", "Médias numériques", ...]
+  quotaMax      Int       @default(10)
+  quotaActuel   Int       @default(0)
+  disponible    Boolean   @default(true)
+  biographie    String?
+  photo         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  userId        String?   @unique
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  etudiants     Etudiant[]
+}
+
+// ─────────────────────────────────────────────
+// ÉTUDIANTS & PROJETS DE MÉMOIRE
+// ─────────────────────────────────────────────
+
+model Etudiant {
+  id              String    @id @default(cuid())
+  nom             String
+  prenom          String
+  email           String    @unique
+  programme       String    @default("Master en communication")
+  annee           Int
+
+  // Projet de mémoire
+  titreMémoire    String?
+  resumeProjet    String?
+  domaines        String    @default("[]") // JSON array
+  lieuImmersion   String?
+  questionRecherche String?
+  remarques       String?
+
+  // Assignation
+  promoteurId     String?
+  promoteur       Promoteur? @relation(fields: [promoteurId], references: [id], onDelete: SetNull)
+
+  // Workflow
+  etapeActuelle   String    @default("DEPOT_SUJET")
+  statut          String    @default("EN_ATTENTE") // EN_ATTENTE | EN_COURS | VALIDE | REJETE
+
+  userId          String?   @unique
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  documents       Document[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// WORKFLOW
+// ─────────────────────────────────────────────
+
+model EtapeWorkflow {
+  id          String    @id @default(cuid())
+  code        String    @unique // ex: DEPOT_SUJET
+  label       String             // ex: "Dépôt du sujet"
+  description String?
+  ordre       Int               // Position dans le workflow
+  actif       Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// DOCUMENTS
+// ─────────────────────────────────────────────
+
+model Document {
+  id          String    @id @default(cuid())
+  nom         String
+  nomFichier  String    // Nom du fichier sur le serveur
+  type        String?   // MIME type
+  taille      Int?      // Taille en octets
+  etape       String    // Code de l'étape du workflow
+  etudiantId  String
+  etudiant    Etudiant  @relation(fields: [etudiantId], references: [id], onDelete: Cascade)
+  uploadedBy  String?   // userId de celui qui a uploadé
+  createdAt   DateTime  @default(now())
+}
+
+// ─────────────────────────────────────────────
+// MÉMOIRES ANTÉRIEURS (historique)
+// ─────────────────────────────────────────────
+
+model MémoireAntérieur {
+  id          String    @id @default(cuid())
+  titre       String
+  resume      String?
+  auteur      String
+  annee       Int
+  promoteur   String
+  domaines    String    @default("[]") // JSON array
+  note        String?
+  mention     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("memoires_anterieurs")
+}
+
+// ─────────────────────────────────────────────
+// DOCUMENTS RÉGLEMENTAIRES (pour le chatbot RAG)
+// ─────────────────────────────────────────────
+
+model DocumentRéglementaire {
+  id          String    @id @default(cuid())
+  titre       String
+  contenu     String
+  categorie   String    @default("GENERAL") // REGLEMENT | CONSIGNE | FAQ | GUIDE
+  // Pour PostgreSQL + pgvector : embedding Float[] @db.Vector(1536)
+  // Non supporté en SQLite — sera ajouté lors de la migration PostgreSQL
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("documents_reglementaires")
+}

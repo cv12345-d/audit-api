@@ -1,166 +1,152 @@
-// server.js - Serveur API pour recevoir les audits
-// Installation requise : npm install express cors
+// server.js — ThesisMatch API
+// Plateforme de gestion des mémoires de master — UCLouvain
+// Phase 1 : Fondations (authentification, CRUD, matching, workflow)
+
+require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs').promises;
-const path = require('path');
+const { initDatabase } = require('./src/utils/database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// ─────────────────────────────────────────────
+// Middlewares globaux
+// ─────────────────────────────────────────────
+
 app.use(cors({
-  origin: '*',
+  origin: process.env.FRONTEND_URL || '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
-app.use(express.json());
 
-// Fichier de stockage des audits
-const AUDITS_FILE = path.join(__dirname, 'audits.json');
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
 
-// Initialiser le fichier s'il n'existe pas
-async function initializeStorage() {
-  try {
-    await fs.access(AUDITS_FILE);
-  } catch {
-    await fs.writeFile(AUDITS_FILE, JSON.stringify([]));
-  }
-}
+// ─────────────────────────────────────────────
+// Routes
+// ─────────────────────────────────────────────
 
-// Lire tous les audits
-async function readAudits() {
-  try {
-    const data = await fs.readFile(AUDITS_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    return [];
-  }
-}
+app.use('/api/auth',       require('./src/routes/auth'));
+app.use('/api/promoteurs', require('./src/routes/promoteurs'));
+app.use('/api/etudiants',  require('./src/routes/etudiants'));
+app.use('/api/matching',   require('./src/routes/matching'));
+app.use('/api/memoires',   require('./src/routes/memoires'));
+app.use('/api/documents',  require('./src/routes/documents'));
+app.use('/api/workflow',   require('./src/routes/workflow'));
+app.use('/api/stats',      require('./src/routes/stats'));
 
-// Sauvegarder les audits
-async function saveAudits(audits) {
-  await fs.writeFile(AUDITS_FILE, JSON.stringify(audits, null, 2));
-}
+// ─────────────────────────────────────────────
+// Route racine — documentation des endpoints
+// ─────────────────────────────────────────────
 
-// Route principale - infos sur l'API
 app.get('/', (req, res) => {
   res.json({
-    message: 'API d\'Audit d\'Automatisation',
+    nom: 'ThesisMatch API',
+    version: '1.0.0',
+    description: 'Plateforme de gestion des memoires de master — UCLouvain',
+    statut: 'Phase 1 — Fondations',
     endpoints: {
-      'POST /audits': 'Soumettre un nouvel audit',
-      'GET /audits': 'Récupérer tous les audits',
-      'GET /audits/:id': 'Récupérer un audit spécifique'
-    }
+      auth: {
+        'POST /api/auth/login':    'Connexion (email + mot de passe)',
+        'POST /api/auth/register': 'Creer un compte [ADMIN]',
+        'GET  /api/auth/me':       'Profil utilisateur connecte',
+        'PUT  /api/auth/password': 'Changer son mot de passe',
+      },
+      promoteurs: {
+        'GET    /api/promoteurs':      'Liste des promoteurs',
+        'GET    /api/promoteurs/:id':  'Detail d\'un promoteur',
+        'POST   /api/promoteurs':      'Creer un promoteur [ADMIN]',
+        'PUT    /api/promoteurs/:id':  'Modifier un promoteur [ADMIN/proprietaire]',
+        'DELETE /api/promoteurs/:id':  'Supprimer un promoteur [ADMIN]',
+      },
+      etudiants: {
+        'GET    /api/etudiants':      'Liste des etudiants',
+        'GET    /api/etudiants/:id':  'Detail d\'un etudiant',
+        'POST   /api/etudiants':      'Creer un etudiant [ADMIN]',
+        'PUT    /api/etudiants/:id':  'Modifier un etudiant',
+        'DELETE /api/etudiants/:id':  'Supprimer un etudiant [ADMIN]',
+      },
+      matching: {
+        'GET    /api/matching/:etudiantId':     'Suggestions de promoteurs pour un projet',
+        'POST   /api/matching/assigner':        'Assigner un promoteur a un etudiant [ADMIN]',
+        'DELETE /api/matching/desassigner/:id': 'Retirer l\'assignation [ADMIN]',
+      },
+      memoires: {
+        'GET    /api/memoires':        'Liste des memoires anterieurs (paginee)',
+        'GET    /api/memoires/:id':    'Detail d\'un memoire',
+        'POST   /api/memoires':        'Ajouter un memoire [ADMIN]',
+        'POST   /api/memoires/import': 'Import en masse [ADMIN]',
+        'PUT    /api/memoires/:id':    'Modifier un memoire [ADMIN]',
+        'DELETE /api/memoires/:id':    'Supprimer un memoire [ADMIN]',
+      },
+      documents: {
+        'POST   /api/documents/upload/:etudiantId': 'Uploader un document',
+        'GET    /api/documents/etudiant/:id':        'Documents d\'un etudiant',
+        'GET    /api/documents/:id/telecharger':     'Telecharger un document',
+        'DELETE /api/documents/:id':                 'Supprimer un document',
+      },
+      workflow: {
+        'GET    /api/workflow/etapes':             'Liste des etapes du workflow',
+        'POST   /api/workflow/etapes':             'Creer une etape [ADMIN]',
+        'PUT    /api/workflow/etapes/:id':         'Modifier une etape [ADMIN]',
+        'DELETE /api/workflow/etapes/:id':         'Supprimer une etape [ADMIN]',
+        'PUT    /api/workflow/etudiant/:id/etape': 'Avancer l\'etape d\'un etudiant [ADMIN/PROMOTEUR]',
+      },
+      stats: {
+        'GET /api/stats':            'Vue d\'ensemble [ADMIN]',
+        'GET /api/stats/promoteurs': 'Stats par promoteur [ADMIN]',
+        'GET /api/stats/domaines':   'Repartition des domaines [ADMIN]',
+      },
+    },
+    authentification: 'Bearer token JWT — header: Authorization: Bearer <token>',
+    roles: ['ETUDIANT', 'PROMOTEUR', 'ADMIN'],
   });
 });
 
-// POST - Créer un nouvel audit
-app.post('/audits', async (req, res) => {
-  try {
-    const auditData = req.body;
-    
-    // Validation basique
-    if (!auditData.entreprise || !auditData.resultats) {
-      return res.status(400).json({ 
-        error: 'Données invalides',
-        message: 'entreprise et resultats sont requis'
-      });
-    }
+// ─────────────────────────────────────────────
+// Gestion des routes introuvables (404)
+// ─────────────────────────────────────────────
 
-    // Lire les audits existants
-    const audits = await readAudits();
-    
-    // Créer le nouvel audit avec un ID unique
-    const newAudit = {
-      id: Date.now().toString(),
-      ...auditData,
-      dateReception: new Date().toISOString()
-    };
-    
-    // Ajouter et sauvegarder
-    audits.push(newAudit);
-    await saveAudits(audits);
-    
-    console.log(`Nouvel audit reçu: ${newAudit.entreprise} (ID: ${newAudit.id})`);
-    
-    res.status(201).json({
-      success: true,
-      message: 'Audit enregistré avec succès',
-      id: newAudit.id,
-      entreprise: newAudit.entreprise
-    });
-  } catch (error) {
-    console.error('Erreur lors de l\'enregistrement:', error);
-    res.status(500).json({ 
-      error: 'Erreur serveur',
-      message: error.message
-    });
-  }
+app.use((req, res) => {
+  res.status(404).json({
+    erreur: 'Route introuvable',
+    message: `${req.method} ${req.path} n'existe pas. Consultez GET / pour la liste des endpoints.`,
+  });
 });
 
-// GET - Récupérer tous les audits
-app.get('/audits', async (req, res) => {
-  try {
-    const audits = await readAudits();
-    
-    // Retourner uniquement les infos principales (pas les détails)
-    const summary = audits.map(audit => ({
-      id: audit.id,
-      entreprise: audit.entreprise,
-      date: audit.date,
-      scoreGlobal: audit.scoreGlobal,
-      dateReception: audit.dateReception
-    }));
-    
-    res.json({
-      total: audits.length,
-      audits: summary
-    });
-  } catch (error) {
-    console.error('Erreur lors de la récupération:', error);
-    res.status(500).json({ 
-      error: 'Erreur serveur',
-      message: error.message
-    });
-  }
+// ─────────────────────────────────────────────
+// Gestion globale des erreurs
+// ─────────────────────────────────────────────
+
+app.use((err, req, res, next) => {
+  console.error('[Erreur globale]', err);
+  res.status(500).json({
+    erreur: 'Erreur interne du serveur',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Une erreur inattendue s\'est produite',
+  });
 });
 
-// GET - Récupérer un audit spécifique
-app.get('/audits/:id', async (req, res) => {
-  try {
-    const audits = await readAudits();
-    const audit = audits.find(a => a.id === req.params.id);
-    
-    if (!audit) {
-      return res.status(404).json({ 
-        error: 'Non trouvé',
-        message: `Aucun audit avec l'ID ${req.params.id}`
-      });
-    }
-    
-    res.json(audit);
-  } catch (error) {
-    console.error('Erreur lors de la récupération:', error);
-    res.status(500).json({ 
-      error: 'Erreur serveur',
-      message: error.message
-    });
-  }
-});
+// ─────────────────────────────────────────────
+// Demarrage
+// ─────────────────────────────────────────────
 
-// Démarrer le serveur
-initializeStorage().then(() => {
+async function start() {
+  await initDatabase();
   app.listen(PORT, () => {
-    console.log(`🚀 Serveur API démarré sur http://localhost:${PORT}`);
-    console.log(`📝 Les audits seront sauvegardés dans: ${AUDITS_FILE}`);
+    console.log(`ThesisMatch API demarree sur http://localhost:${PORT}`);
+    console.log(`Environnement : ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Documentation : GET http://localhost:${PORT}/`);
   });
+}
+
+start().catch(err => {
+  console.error('Echec du demarrage :', err);
+  process.exit(1);
 });
 
-// Gestion propre de l'arrêt
 process.on('SIGTERM', () => {
-  console.log('Arrêt du serveur...');
+  console.log('Arret du serveur...');
   process.exit(0);
-
 });

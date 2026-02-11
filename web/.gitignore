@@ -1,0 +1,20 @@
+# Dépendances
+node_modules/
+.pnp
+.pnp.js
+
+# Build Next.js
+.next/
+out/
+
+# Variables d'environnement
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Système
+.DS_Store
+*.log
+npm-debug.log*

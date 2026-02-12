@@ -110,3 +110,61 @@ export const workflow = {
       body: JSON.stringify({ etape, statut }),
     }),
 };
+
+// ─────────────────────────────────────────────
+// Mémoires antérieurs
+// ─────────────────────────────────────────────
+
+export const memoires = {
+  list: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/memoires${qs ? `?${qs}` : ''}`);
+  },
+  get: (id) => request(`/memoires/${id}`),
+};
+
+// ─────────────────────────────────────────────
+// Documents
+// ─────────────────────────────────────────────
+
+export const documents = {
+  etudiant: (etudiantId, params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/documents/etudiant/${etudiantId}${qs ? `?${qs}` : ''}`);
+  },
+
+  upload: async (etudiantId, file, etape, nom) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('etape', etape);
+    if (nom) formData.append('nom', nom);
+    const res = await fetch(`${API_BASE}/documents/upload/${etudiantId}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.erreur || `Erreur HTTP ${res.status}`);
+    return data;
+  },
+
+  telecharger: async (docId, nomFichier) => {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/documents/${docId}/telecharger`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error('Téléchargement échoué');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomFichier || 'document';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  supprimer: (id) => request(`/documents/${id}`, { method: 'DELETE' }),
+};

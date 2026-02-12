@@ -11,20 +11,24 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const ROLE_REDIRECT = { ADMIN: '/admin', ETUDIANT: '/etudiant', PROMOTEUR: '/promoteur' };
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
       const data = await auth.login(email, password);
-      if (data.utilisateur.role !== 'ADMIN') {
-        setError('Accès réservé aux administrateurs.');
+      const { role } = data.utilisateur;
+      const dest = ROLE_REDIRECT[role];
+      if (!dest) {
+        setError('Rôle inconnu, contactez l\'administration.');
         setLoading(false);
         return;
       }
       localStorage.setItem('thesismatch_token', data.token);
       localStorage.setItem('thesismatch_user', JSON.stringify(data.utilisateur));
-      router.push('/admin');
+      router.push(dest);
     } catch (err) {
       setError(err.message || 'Connexion impossible.');
       setLoading(false);
@@ -100,7 +104,7 @@ export default function LoginPage() {
           </form>
 
           <p className="mt-4 text-xs text-center text-slate-400">
-            Accès réservé à la direction du master
+            Plateforme ThesisMatch — UCLouvain
           </p>
         </div>
       </div>
